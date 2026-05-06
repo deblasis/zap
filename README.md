@@ -25,8 +25,10 @@ proved to be:
 ## FAQ:
 
 - Q: **What version of Zig does Zap support?**
-    - Zap uses the latest stable zig release (0.15.1), so you don't have to keep
-      up with frequent breaking changes. It's an "LTS feature".
+    - The `zig16-compatible` branch supports **Zig 0.16.x**.
+    - The default branch (`master`) uses the latest stable zig release (0.15.1).
+    - **Windows support** is available on the `zig16-compatible` branch.
+    - It's an "LTS feature" — you don't have to keep up with frequent breaking changes.
 - Q: **Can Zap build with Zig's master branch?**
     - See the `zig-master` branch. Please note that the zig-master branch is not
       the official master branch of ZAP. Be aware that I don't provide tagged
@@ -37,9 +39,11 @@ proved to be:
       [here](https://zigzap.org/zap).
     - Run `zig build run-docserver` to serve them locally.
 - Q: **Does ZAP work on Windows?**
-    - No. This is due to the underlying facil.io C library. Future versions
-      of facil.io might support Windows but there is no timeline yet. Your best
-      options on Windows are **WSL2 or a docker container**.
+    - **Yes!** As of the `zig16-compatible` branch, Zap fully supports Windows.
+    - HTTP serving, request handling, mustache templates, and all core features work.
+    - Single-process mode only (`workers = 1`) since Windows has no `fork()`.
+    - The underlying facil.io library has a `windows-support` branch with Winsock2
+      compatibility including an FD mapping layer for socket operations.
 - Q: **Does ZAP support TLS / HTTPS?**
     - Yes, ZAP supports using the system's openssl. See the
       [https](./examples/https/https.zig) example and make sure to build with
