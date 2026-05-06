@@ -60,6 +60,7 @@ Feel free to copy, use and enjoy according to the license provided.
     defined(__OpenBSD__) || defined(__bsdi__) || defined(__DragonFly__)
 #define FIO_ENGINE_KQUEUE 1
 #else
+#undef FIO_ENGINE_POLL
 #define FIO_ENGINE_POLL 1
 #endif
 #endif
@@ -1426,6 +1427,11 @@ static void sig_int_handler(int sig) {
 
 /* setup handling for the SIGUSR1, SIGPIPE, SIGINT and SIGTERM signals. */
 static void fio_signal_handler_setup(void) {
+#ifdef _WIN32
+  /* Windows: simplified signal handling */
+  signal(SIGINT, sig_int_handler);
+  signal(SIGTERM, sig_int_handler);
+#else
   /* setup signal handling */
   struct sigaction act;
   if (fio_trylock(&fio_signal_set_flag))
@@ -1458,9 +1464,14 @@ static void fio_signal_handler_setup(void) {
     perror("couldn't set signal handler");
     return;
   };
+#endif /* _WIN32 */
 }
 
 void fio_signal_handler_reset(void) {
+#ifdef _WIN32
+  signal(SIGINT, SIG_DFL);
+  signal(SIGTERM, SIG_DFL);
+#else
   struct sigaction old;
   if (fio_signal_set_flag)
     return;
@@ -1479,6 +1490,7 @@ void fio_signal_handler_reset(void) {
   memset(&fio_old_sig_term, 0, sizeof(fio_old_sig_term));
   memset(&fio_old_sig_pipe, 0, sizeof(fio_old_sig_pipe));
   memset(&fio_old_sig_chld, 0, sizeof(fio_old_sig_chld));
+#endif /* _WIN32 */
 }
 
 /**
@@ -1940,7 +1952,11 @@ Section Start Marker
  */
 char const *fio_engine(void) { return "poll"; }
 
+#ifdef _WIN32
+#define FIO_POLL_READ_EVENTS (POLLIN)
+#else
 #define FIO_POLL_READ_EVENTS (POLLPRI | POLLIN)
+#endif
 #define FIO_POLL_WRITE_EVENTS (POLLOUT)
 
 static void fio_poll_close(void) {}
@@ -2427,6 +2443,11 @@ intptr_t fio_accept(intptr_t srv_uuid) {
 
 /* Creates a Unix socket - returning it's uuid (or -1) */
 static intptr_t fio_unix_socket(const char *address, uint8_t server) {
+#ifdef _WIN32
+  FIO_LOG_ERROR("(fio_unix_socket) not supported on Windows: %s", address);
+  errno = EAFNOSUPPORT;
+  return -1;
+#else
   /* Unix socket */
   struct sockaddr_un addr = {0};
   size_t addr_len = strlen(address);
@@ -2483,6 +2504,7 @@ static intptr_t fio_unix_socket(const char *address, uint8_t server) {
     fd_data(fd).addr_len = addr_len;
   }
   return fd2uuid(fd);
+#endif /* _WIN32 */
 }
 
 /* Creates a TCP/IP socket - returning it's uuid (or -1) */
@@ -2631,11 +2653,8 @@ Internal socket flushing related functions
 #endif
 
 static void fio_sock_perform_close_fd(intptr_t fd) {
-#ifdef _WIN32
-  closesocket((SOCKET)fd);
-#else
+  /* close() is overridden by fio_win32_fdmap.h on Windows */
   close(fd);
-#endif
 }
 
 static inline void fio_sock_packet_rotate_unsafe(uintptr_t fd) {
@@ -3092,12 +3111,20 @@ Connection Read / Write Hooks, for overriding the system calls
 
 static ssize_t fio_hooks_default_read(intptr_t uuid, void *udata, void *buf,
                                       size_t count) {
+#ifdef _WIN32
+  return recv(fio_uuid2fd(uuid), buf, count, 0);
+#else
   return read(fio_uuid2fd(uuid), buf, count);
+#endif
   (void)(udata);
 }
 static ssize_t fio_hooks_default_write(intptr_t uuid, void *udata,
                                        const void *buf, size_t count) {
+#ifdef _WIN32
+  return send(fio_uuid2fd(uuid), buf, count, 0);
+#else
   return write(fio_uuid2fd(uuid), buf, count);
+#endif
   (void)(udata);
 }
 
@@ -3831,8 +3858,10 @@ static void fio_worker_cleanup(void) {
   if (!fio_data->is_worker) {
     fio_cluster_signal_children();
     fio_defer_perform();
+#ifndef _WIN32
     while (wait(NULL) != -1)
       ;
+#endif
   }
   fio_defer_perform();
   fio_state_callback_force(FIO_CALL_ON_FINISH);
@@ -5897,7 +5926,10 @@ static void fio_cluster_cleanup(void *ignore) {
 
 static void fio_cluster_init(void) {
   fio_cluster_data_cleanup(0);
-  /* create a unique socket name */
+#ifdef _WIN32
+  /* Windows: no Unix sockets for cluster IPC */
+  cluster_data.name[0] = 0;
+#else
   char *tmp_folder = getenv("TMPDIR");
   uint32_t tmp_folder_len = 0;
   if (!tmp_folder || ((tmp_folder_len = (uint32_t)strlen(tmp_folder)) >
@@ -5926,8 +5958,8 @@ static void fio_cluster_init(void) {
                FIO_CLUSTER_NAME_LIMIT - tmp_folder_len, "%d", (int)getpid());
   cluster_data.name[tmp_folder_len] = 0;
 
-  /* remove if existing */
   unlink(cluster_data.name);
+#endif /* _WIN32 */
   /* add cleanup callback */
   fio_state_callback_add(FIO_CALL_AT_EXIT, fio_cluster_cleanup, NULL);
 }
@@ -6231,6 +6263,10 @@ static void fio_cluster_listen_on_close(intptr_t uuid,
 }
 
 static void fio_listen2cluster(void *ignore) {
+#ifdef _WIN32
+  (void)ignore;
+  return;
+#else
   /* this is called for each `fork`, but we only need this to run once. */
   fio_lock(&cluster_data.lock);
   cluster_data.uuid = fio_socket(cluster_data.name, NULL, 1);
@@ -6252,6 +6288,7 @@ static void fio_listen2cluster(void *ignore) {
                 cluster_data.name);
   fio_attach(cluster_data.uuid, p);
   (void)ignore;
+#endif /* _WIN32 */
 }
 
 /* *****************************************************************************
@@ -6342,6 +6379,10 @@ static void fio_cluster_on_fail(intptr_t uuid, void *udata) {
 }
 
 static void fio_connect2cluster(void *ignore) {
+#ifdef _WIN32
+  (void)ignore;
+  return;
+#else
   if (cluster_data.uuid)
     fio_force_close(cluster_data.uuid);
   cluster_data.uuid = 0;
@@ -6350,6 +6391,7 @@ static void fio_connect2cluster(void *ignore) {
               .on_connect = fio_cluster_on_connect,
               .on_fail = fio_cluster_on_fail);
   (void)ignore;
+#endif /* _WIN32 */
 }
 
 static void fio_send2cluster(fio_msg_internal_s *m) {

@@ -273,11 +273,19 @@ static inline int fio_win_kill(pid_t pid, int sig) {
 
 /* ioctl — NOTE: overridden by fio_win32_fdmap.h for fd translation */
 
-/* fchmod — not available on Windows, no-op */
+/* fchmod — no direct fd-based equivalent on Windows.
+   Use _chmod on the filename if available, otherwise no-op.
+   Note: the MinGW fchmod may not exist, so we provide a best-effort version. */
 static inline int fchmod(int fd, unsigned int mode) {
     (void)fd; (void)mode;
-    return 0; /* no-op on Windows */
+    /* Windows uses ACL-based permissions; the Unix mode bits have limited
+       meaning. For facil.io's internal use (temp files, sockets), the default
+       permissions from open() are sufficient. */
+    return 0;
 }
+
+/* chmod — MinGW provides this, works on filenames */
+/* (already declared in <sys/stat.h>) */
 
 /* pread — Windows doesn't have pread, use ReadFile with OVERLAPPED */
 static inline ssize_t fio_win_pread(int fd, void *buf, size_t count, long long offset) {

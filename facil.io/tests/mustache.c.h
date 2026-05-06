@@ -138,8 +138,12 @@ static void mustache_on_formatting_error(void *udata1, void *udata2) {
 
 static inline void save2file(char const *filename, char const *data,
                              size_t length) {
-  int fd = open(filename, O_CREAT | O_RDWR, 0);
+  /* Remove stale file if it exists (may be read-only from previous run) */
+  chmod(filename, 0666);
+  unlink(filename);
+  int fd = open(filename, O_CREAT | O_RDWR | O_TRUNC, 0666);
   if (fd == -1) {
+    fprintf(stderr, "DBG: open(%s) failed after chmod+unlink, errno=%d\n", filename, errno);
     perror("Couldn't open / create file for template testing");
     exit(-1);
   }
@@ -210,7 +214,7 @@ void mustache_test(void) {
   mustache_s *m;
   m = mustache_load(.filename = template_name, .err = &err);
   if (m) {
-    unlink(template_name);
+    chmod(template_name, 0666); unlink(template_name);
     FIO_ASSERT(!m,
                "Mustache template loading should have failed without partial "
                "(err = %u)\n",
@@ -220,8 +224,8 @@ void mustache_test(void) {
 
   m = mustache_load(.filename = template_name, .err = &err);
   if (!m) {
-    unlink(template_name);
-    unlink(partial_name);
+    chmod(template_name, 0666); unlink(template_name);
+    chmod(partial_name, 0666); unlink(partial_name);
     FIO_ASSERT(m, "Mustache template loading from file failed with error %u\n",
                err);
   }
@@ -229,8 +233,8 @@ void mustache_test(void) {
   m = mustache_load(.data = partial2, .data_len = strlen(partial2),
                     .err = &err);
   if (!m) {
-    unlink(template_name);
-    unlink(partial_name);
+    chmod(template_name, 0666); unlink(template_name);
+    chmod(partial_name, 0666); unlink(partial_name);
     FIO_ASSERT(
         m, "Mustache template loading partial as data failed with error %u\n",
         err);
@@ -238,8 +242,8 @@ void mustache_test(void) {
   mustache_free(m);
   m = mustache_load(.filename = template_name, .data = template,
                     .data_len = strlen(template), .err = &err);
-  unlink(template_name);
-  unlink(partial_name);
+  chmod(template_name, 0666); unlink(template_name);
+  chmod(partial_name, 0666); unlink(partial_name);
 
   uint32_t expected[] = {
       MUSTACHE_SECTION_START,       MUSTACHE_WRITE_TEXT,
@@ -278,5 +282,10 @@ void mustache_test(void) {
              "Callback type error on finish");
   /* cleanup */
   mustache_free(m);
+  /* Ensure temp files are cleaned up (Windows may leave read-only files) */
+  chmod("mustache_test_template.mustache", 0666);
+  unlink("mustache_test_template.mustache");
+  chmod("mustache_test_partial.mustache", 0666);
+  unlink("mustache_test_partial.mustache");
   fprintf(stderr, "* passed.\n");
 }

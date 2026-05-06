@@ -176,15 +176,18 @@ static inline int fio_win_listen(int sockfd, int backlog) {
 
 /* Override setsockopt() */
 #undef setsockopt
-static inline int fio_win_setsockopt(int sockfd, int level, int optname, const char *optval, int optlen) {
-    return fio_win_orig_setsockopt((SOCKET)fio_win_fd_to_handle(sockfd), level, optname, optval, optlen);
+static inline int fio_win_setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen) {
+    return fio_win_orig_setsockopt((SOCKET)fio_win_fd_to_handle(sockfd), level, optname, (const char*)optval, (int)optlen);
 }
 #define setsockopt fio_win_setsockopt
 
 /* Override getsockopt() */
 #undef getsockopt
-static inline int fio_win_getsockopt(int sockfd, int level, int optname, char *optval, int *optlen) {
-    return fio_win_orig_getsockopt((SOCKET)fio_win_fd_to_handle(sockfd), level, optname, optval, optlen);
+static inline int fio_win_getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {
+    int optlen_int = optlen ? (int)*optlen : 0;
+    int ret = fio_win_orig_getsockopt((SOCKET)fio_win_fd_to_handle(sockfd), level, optname, (char*)optval, &optlen_int);
+    if (optlen) *optlen = (socklen_t)optlen_int;
+    return ret;
 }
 #define getsockopt fio_win_getsockopt
 
@@ -215,6 +218,10 @@ static inline int fio_win_send(int sockfd, const void *buf, size_t len, int flag
     return fio_win_orig_send((SOCKET)fio_win_fd_to_handle(sockfd), buf, (int)len, flags);
 }
 #define send fio_win_send
+
+/* read()/write() are not overridden via #define to avoid conflicts with
+   struct field names. Instead, fio_hooks_default_read/write in fio.c use
+   recv()/send() on Windows. */
 
 /* Override WSAPoll (the poll wrapper from fio_win32.h) to translate fds */
 #undef poll
@@ -249,15 +256,19 @@ static inline int fio_win_fcntl(int fd, int cmd, ...) {
 }
 #define fcntl fio_win_fcntl
 
-/* Override ioctl as well (some codepaths use ioctl(FIONBIO) directly) */
+/* Override ioctl (some codepaths use ioctl(FIONBIO) directly) */
 #undef ioctl
-static inline int fio_win_ioctl(int fd, long cmd, u_long *argp) {
-    return ioctlsocket((SOCKET)fio_win_fd_to_handle(fd), (long)cmd, argp);
+static inline int fio_win_ioctl(int fd, long cmd, void *argp) {
+    u_long val = 0;
+    if (argp) val = *(int*)argp;
+    int ret = ioctlsocket((SOCKET)fio_win_fd_to_handle(fd), (long)cmd, &val);
+    if (argp) *(int*)argp = (int)val;
+    return ret;
 }
 #define ioctl fio_win_ioctl
 
-/* Override unlink (Unix sockets use file paths, no-op on Windows) */
-#define unlink(path) (-1)
+/* unlink — MinGW provides this; it works for regular files.
+   Only Unix socket paths would fail, but fio_unix_socket handles that. */
 
 #endif /* _WIN32 */
 #endif /* FIO_WIN32_FDMAP_H */

@@ -175,7 +175,6 @@ static FIOBJ headers2str(http_s *h, uintptr_t padding) {
 
 /** Should send existing headers and data */
 static int http1_send_body(http_s *h, void *data, uintptr_t length) {
-
   FIOBJ packet = headers2str(h, length);
   if (!packet) {
     http1_after_finish(h);

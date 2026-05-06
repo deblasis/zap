@@ -31,7 +31,7 @@ const struct_unnamed_37 = extern struct {
     flag: usize,
     out_headers: FIOBJ,
 };
-pub const __time_t = c_long;
+pub const __time_t = if (@sizeOf(usize) == 8) c_longlong else c_long;
 pub const time_t = __time_t;
 pub const __syscall_slong_t = c_long;
 pub const struct_timespec = extern struct {
