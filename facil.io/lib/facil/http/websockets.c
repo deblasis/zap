@@ -17,7 +17,12 @@ Feel free to copy, use and enjoy according to the license provided.
 #include <http.h>
 #include <http_internal.h>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
+#endif
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -96,7 +101,7 @@ void free_ws_buffer(ws_s *owner, struct buffer_s buff) {
 Create/Destroy the websocket object (prototypes)
 */
 
-static ws_s *new_websocket(intptr_t uuid);
+static ws_s *new_websocket();
 static void destroy_ws(ws_s *ws);
 
 /*******************************************************************************

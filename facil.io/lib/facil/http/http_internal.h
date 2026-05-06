@@ -15,7 +15,13 @@ Feel free to copy, use and enjoy according to the license provided.
 
 #include <http.h>
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#else
 #include <arpa/inet.h>
+#endif
 #include <errno.h>
 
 /* *****************************************************************************

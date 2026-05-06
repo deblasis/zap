@@ -21,7 +21,11 @@ Feel free to copy, use and enjoy according to the license provided.
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#ifdef _WIN32
+#include <fio_win32.h>
+#else
 #include <unistd.h>
+#endif
 
 #include <errno.h>
 #include <fcntl.h>

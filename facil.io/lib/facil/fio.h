@@ -11,6 +11,10 @@ Feel free to copy, use and enjoy according to the license provided.
 */
 #define H_FACIL_IO_H
 
+#ifdef _WIN32
+#include <fio_win32.h>
+#endif
+
 /* *****************************************************************************
  * Table of contents (find by subject):
  * =================

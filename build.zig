@@ -38,12 +38,7 @@ const TestSystem = struct {
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
-    if (target.result.os.tag == .windows) {
-        std.log.err("\x1b[31mPlatform Not Supported\x1b[0m\nCurrently, Facil.io and Zap are not compatible with Windows. Consider using Linux or Windows Subsystem for Linux (WSL) instead.\nFor more information, please see:\n- https://github.com/zigzap/zap#most-faq\n- https://facil.io/#forking-contributing-and-all-that-jazz\n", .{});
-        std.process.exit(1);
-    }
-    // Standard release options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
+    // Windows now supported via fio_win32.h compatibility layer in facil.io
     const optimize = b.standardOptimizeOption(.{});
 
     const use_openssl = b.option(bool, "openssl", "Use system-installed openssl for TLS support in zap") orelse false;

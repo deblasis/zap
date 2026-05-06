@@ -1,5 +1,5 @@
 #if defined(__unix__) || defined(__APPLE__) || defined(__linux__) ||           \
-    defined(__CYGWIN__) /* require POSIX */
+    defined(__CYGWIN__) || defined(_WIN32) /* require POSIX */
 /*
 Copyright: Boaz Segev, 2017-2019
 License: MIT

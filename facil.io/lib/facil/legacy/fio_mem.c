@@ -12,10 +12,15 @@ Feel free to copy, use and enjoy according to the license provided.
 #include <time.h>
 #endif /* __unix__ */
 
+#ifdef _WIN32
+#include <fio_win32.h>
+#include <stdint.h>
+#else
 #include <pthread.h>
 #include <sys/mman.h>
 #include <unistd.h>
-
+#endif
+#include <stdint.h>
 /* *****************************************************************************
 If FIO_FORCE_MALLOC is set, use glibc / library malloc
 ***************************************************************************** */
