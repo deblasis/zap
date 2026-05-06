@@ -4539,6 +4539,66 @@ FIO_FUNC fio_str_info_s fio_str_readfile(fio_str_s *s, const char *filename,
 finish:
   FIO_FREE(path);
   return state;
+#elif defined(_WIN32)
+  /* Windows implementation using CRT file I/O */
+  if (filename == NULL || !s)
+    return state;
+  char *path = NULL;
+  size_t path_len = 0;
+
+  if (filename[0] == '~' && (filename[1] == '/' || filename[1] == '\\')) {
+    char *home = getenv("USERPROFILE");
+    if (home) {
+      size_t filename_len = strlen(filename);
+      size_t home_len = strlen(home);
+      if ((home_len + filename_len) >= (1 << 16))
+        return state;
+      if (home[home_len - 1] == '/' || home[home_len - 1] == '\\')
+        --home_len;
+      path_len = home_len + filename_len - 1;
+      path = FIO_MALLOC(path_len + 1);
+      FIO_ASSERT_ALLOC(path);
+      memcpy(path, home, home_len);
+      memcpy(path + home_len, filename + 1, filename_len);
+      path[path_len] = 0;
+      filename = path;
+    }
+  }
+
+  int file = _open(filename, _O_RDONLY | _O_BINARY);
+  if (file == -1)
+    goto win_finish;
+
+  __int64 file_size = _lseeki64(file, 0, SEEK_END);
+  if (file_size <= 0 || start_at >= file_size) {
+    state = fio_str_info(s);
+    _close(file);
+    goto win_finish;
+  }
+
+  if (start_at < 0) {
+    start_at = file_size + start_at;
+    if (start_at < 0)
+      start_at = 0;
+  }
+
+  if (limit <= 0 || file_size < (limit + start_at))
+    limit = (intptr_t)(file_size - start_at);
+
+  _lseeki64(file, start_at, SEEK_SET);
+  {
+    const size_t org_len = fio_str_len(s);
+    state = fio_str_resize(s, org_len + (size_t)limit);
+    if (_read(file, state.data + org_len, (unsigned)limit) != limit) {
+      fio_str_resize(s, org_len);
+      state.data = NULL;
+      state.len = state.capa = 0;
+    }
+  }
+  _close(file);
+win_finish:
+  FIO_FREE(path);
+  return state;
 #else
   /* TODO: consider adding non POSIX implementations. */
   FIO_LOG_ERROR("File reading requires a posix system (ignored!).\n");

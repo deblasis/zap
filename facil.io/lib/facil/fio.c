@@ -20,6 +20,7 @@ Feel free to copy, use and enjoy according to the license provided.
 
 #ifdef _WIN32
 #include <fio_win32.h>
+#include <fio_win32_fdmap.h>
 #else
 #include <pthread.h>
 #include <sys/mman.h>
@@ -2380,8 +2381,9 @@ intptr_t fio_accept(intptr_t srv_uuid) {
     return -1;
 #else
   client = accept(fio_uuid2fd(srv_uuid), (struct sockaddr *)addrinfo, &addrlen);
-  if (client <= 0)
+  if (client <= 0) {
     return -1;
+  }
   if (fio_set_non_block(client) == -1) {
     close(client);
     return -1;
@@ -2464,7 +2466,11 @@ static intptr_t fio_unix_socket(const char *address, uint8_t server) {
     fchmod(fd, 0777);
   } else {
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1 &&
-        errno != EINPROGRESS) {
+        errno != EINPROGRESS
+#ifdef _WIN32
+        && WSAGetLastError() != WSAEWOULDBLOCK
+#endif
+    ) {
       close(fd);
       return -1;
     }
@@ -2543,7 +2549,11 @@ static intptr_t fio_tcp_socket(const char *address, const char *port,
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
     errno = 0;
     for (struct addrinfo *i = addrinfo; i; i = i->ai_next) {
-      if (connect(fd, i->ai_addr, i->ai_addrlen) == 0 || errno == EINPROGRESS)
+      if (connect(fd, i->ai_addr, i->ai_addrlen) == 0 || errno == EINPROGRESS
+#ifdef _WIN32
+          || WSAGetLastError() == WSAEWOULDBLOCK
+#endif
+      )
         goto socket_okay;
     }
     freeaddrinfo(addrinfo);
@@ -9454,6 +9464,10 @@ Testing listening socket
 FIO_FUNC void fio_socket_test(void) {
   /* initialize unix socket name */
   fio_str_s sock_name = FIO_STR_INIT;
+#ifdef _WIN32
+  /* Unix sockets not supported on Windows — skip to TCP tests */
+  goto tcp_test;
+#endif
 #ifdef P_tmpdir
   fio_str_write(&sock_name, P_tmpdir, strlen(P_tmpdir));
   if (fio_str_len(&sock_name) &&
@@ -9523,6 +9537,7 @@ FIO_FUNC void fio_socket_test(void) {
   /* free unix socket name */
   fio_str_free(&sock_name);
 
+tcp_test:
   uuid = fio_socket(NULL, "8765", 1);
   FIO_ASSERT(uuid != -1, "Failed to open TCP/IP socket on port 8765");
   FIO_ASSERT(uuid_data(uuid).open, "TCP/IP socket not initialized");
@@ -9534,6 +9549,7 @@ FIO_FUNC void fio_socket_test(void) {
   for (size_t i = 0; i < 100 && (errno == EAGAIN || errno == EWOULDBLOCK);
        ++i) {
     errno = 0;
+    fio_poll();
     fio_reschedule_thread();
     client2 = fio_accept(uuid);
   }
@@ -11037,7 +11053,11 @@ void fio_test(void) {
   fio_poll_test();
   fio_socket_test();
   fio_uuid_link_test();
+#ifdef _WIN32
+  /* Cycling test requires fork — skip on Windows */
+#else
   fio_cycle_test();
+#endif
   fio_riskyhash_test();
   fio_siphash_test();
   fio_sha1_test();

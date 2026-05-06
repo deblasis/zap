@@ -41,9 +41,7 @@
 static inline int fio_win_poll(struct pollfd *fds, unsigned long nfds, int timeout) {
     return WSAPoll(fds, nfds, timeout);
 }
-
-/* Override poll with our WSAPoll wrapper */
-#define poll(fds, nfds, timeout) fio_win_poll(fds, nfds, timeout)
+/* NOTE: poll override moved to fio_win32_fdmap.h for fd translation */
 
 /* ==========================================================================
  * pthread emulation using Win32 threads
@@ -206,16 +204,8 @@ static inline int fio_munmap(void *addr, size_t size) {
     fio_munmap(addr, len)
 
 /* ==========================================================================
- * close() — safe for both sockets and file descriptors
+ * close() — NOTE: overridden by fio_win32_fdmap.h for fd translation
  * ========================================================================== */
-
-static inline int fio_close_fd(intptr_t fd) {
-    /* Try closesocket first (for sockets), fall back to _close (for pipes/files) */
-    if (closesocket((SOCKET)fd) == 0) return 0;
-    if (WSAGetLastError() != WSAENOTSOCK) return -1;
-    return _close((int)fd);
-}
-#define close(fd) fio_close_fd((intptr_t)(fd))
 
 /* ==========================================================================
  * Socket API differences
@@ -281,8 +271,7 @@ static inline int fio_win_kill(pid_t pid, int sig) {
 }
 #define kill(pid, sig) fio_win_kill(pid, sig)
 
-/* ioctl for sockets — use ioctlsocket on Windows */
-#define ioctl(fd, cmd, arg) ioctlsocket((SOCKET)(fd), (cmd), (u_long *)(arg))
+/* ioctl — NOTE: overridden by fio_win32_fdmap.h for fd translation */
 
 /* fchmod — not available on Windows, no-op */
 static inline int fchmod(int fd, unsigned int mode) {
