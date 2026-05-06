@@ -453,12 +453,12 @@ fio_json_parse(json_parser_s *parser, const char *buffer, size_t length) {
       long long i = fio_atol((char **)&tmp);
       if (tmp > limit)
         goto stop;
-      if (!tmp || JSON_NUMERAL[*tmp]) {
+      if (!tmp || tmp == pos || JSON_NUMERAL[*tmp]) {
         tmp = pos;
         double f = fio_atof((char **)&tmp);
         if (tmp > limit)
           goto stop;
-        if (!tmp || JSON_NUMERAL[*tmp])
+        if (!tmp || tmp == pos || JSON_NUMERAL[*tmp])
           goto error;
         fio_json_on_float(parser, f);
         pos = tmp;

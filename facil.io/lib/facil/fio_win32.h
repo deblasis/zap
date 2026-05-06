@@ -189,7 +189,8 @@ static inline pid_t waitpid(pid_t pid, int *status, int options) {
 static inline void *fio_mmap_anon(size_t size) {
     void *ptr = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE,
                              PAGE_READWRITE);
-    return ptr;
+    /* Return MAP_FAILED on failure so sys_alloc can detect it */
+    return ptr ? ptr : MAP_FAILED;
 }
 
 static inline int fio_munmap(void *addr, size_t size) {
@@ -198,8 +199,9 @@ static inline int fio_munmap(void *addr, size_t size) {
 }
 
 /* Override mmap for anonymous mappings (facil.io only uses anon mmap) */
+/* Note: We ignore addr/alignment hints — VirtualAlloc always returns page-aligned memory */
 #define mmap(addr, len, prot, flags, fd, off) \
-    ((void *)(fio_mmap_anon(len)))
+    fio_mmap_anon(len)
 #define munmap(addr, len) \
     fio_munmap(addr, len)
 
@@ -229,7 +231,8 @@ struct sockaddr_un {
 #endif
 
 /* ==========================================================================
- * Winsock initialization
+ * Winsock initialization — auto-init via constructor
+ * Must happen before any socket operations
  * ========================================================================== */
 
 static inline int fio_winsock_init(void) {
@@ -239,6 +242,14 @@ static inline int fio_winsock_init(void) {
 
 static inline void fio_winsock_cleanup(void) {
     WSACleanup();
+}
+
+static void __attribute__((constructor)) fio_winsock_auto_init(void) {
+    fio_winsock_init();
+}
+
+static void __attribute__((destructor)) fio_winsock_auto_cleanup(void) {
+    fio_winsock_cleanup();
 }
 
 /* ==========================================================================

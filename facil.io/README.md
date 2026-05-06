@@ -5,6 +5,8 @@
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/2abeba588afb444ca6d92e68ccfbe36b)](https://www.codacy.com/app/boazsegev/facil.io?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=boazsegev/facil.io&amp;utm_campaign=Badge_Grade)
 [![codecov](https://codecov.io/gh/boazsegev/facil.io/branch/master/graph/badge.svg)](https://codecov.io/gh/boazsegev/facil.io)
 
+**Note**: Development is currently performed in the **[facil.io C STL repo](https://github.com/facil-io/cstl)**.
+
 [facil.io](http://facil.io) is a C micro-framework for web applications. facil.io includes:
 
 * A fast HTTP/1.1 and Websocket static file + application server.
@@ -48,7 +50,7 @@ int main(int argc, char const **argv) {
   // listen on port 3000 and any available network binding (NULL == 0.0.0.0)
   http_listen("3000", NULL, .on_request = on_request, .log = 1);
   // start the server
-  facil_run(.threads = 1);
+  facil_start(.threads = 1);
   // deallocating the common values
   fiobj_free(HTTP_X_DATA);
 }
@@ -103,6 +105,18 @@ First, add the repository as a submodule using `git`:
 Then add the following line the project's `CMakeLists.txt`
 
     add_subdirectory(facil.io)
+
+### Using `facil.io` with Meson
+
+[facil.io](http://facil.io) is available at [Meson Wrap DB](https://wrapdb.mesonbuild.com/facil).
+
+First, install the wrap file:
+
+    meson wrap install facil
+
+Then add the following line to your project's `meson.build`:
+
+    facil_dep = subproject('facil').get_variable('facil_dep')
 
 ## More Examples
 

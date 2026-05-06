@@ -81,10 +81,15 @@ pub fn build_facilio(
         });
     }
 
-    // link in modopenssl and libcrypto on demand
+    // link in openssl and libcrypto on demand
     if (use_openssl) {
         mod.linkSystemLibrary("ssl", .{});
         mod.linkSystemLibrary("crypto", .{});
+    }
+
+    // Windows: link ws2_32 for Winsock2 (sockets, poll, etc.)
+    if (target.result.os.tag == .windows) {
+        mod.linkSystemLibrary("ws2_32", .{});
     }
 
     b.installArtifact(lib);

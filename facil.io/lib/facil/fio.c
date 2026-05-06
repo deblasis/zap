@@ -1505,7 +1505,11 @@ pid_t fio_parent_pid(void) { return fio_data->parent; }
 
 static inline size_t fio_detect_cpu_cores(void) {
   ssize_t cpu_count = 0;
-#ifdef _SC_NPROCESSORS_ONLN
+#ifdef _WIN32
+  SYSTEM_INFO sysinfo;
+  GetSystemInfo(&sysinfo);
+  cpu_count = (ssize_t)sysinfo.dwNumberOfProcessors;
+#elif defined(_SC_NPROCESSORS_ONLN)
   cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
   if (cpu_count < 0) {
     FIO_LOG_WARNING("CPU core count auto-detection failed.");
@@ -3538,7 +3542,9 @@ static void fio_mem_destroy(void);
 static void __attribute__((destructor)) fio_lib_destroy(void) {
   uint8_t add_eol = fio_is_master();
   fio_data->active = 0;
+#ifndef _WIN32
   fio_on_fork();
+#endif
   fio_defer_perform();
   fio_timer_clear_all();
   fio_defer_perform();
@@ -3562,6 +3568,12 @@ static void __attribute__((constructor)) fio_lib_init(void) {
   /* detect socket capacity - MUST be first...*/
   ssize_t capa = 0;
   {
+#ifdef _WIN32
+    /* Windows: use a fixed capacity, no rlimit to adjust */
+    capa = 1024;
+    if (capa > 1024) /* leave a slice of room */
+      capa -= 16;
+#else
 #ifdef _SC_OPEN_MAX
     capa = sysconf(_SC_OPEN_MAX);
 #elif defined(FOPEN_MAX)
@@ -3585,33 +3597,13 @@ static void __attribute__((constructor)) fio_lib_init(void) {
       if (capa > 1024) /* leave a slice of room */
         capa -= 16;
     }
+#endif
     /* initialize memory allocator */
     fio_mem_init();
     /* initialize polling engine */
     fio_poll_init();
     /* initialize the cluster engine */
     fio_pubsub_initialize();
-#if DEBUG
-#if FIO_ENGINE_POLL
-    FIO_LOG_INFO("facil.io " FIO_VERSION_STRING " capacity initialization:\n"
-                 "*    Meximum open files %zu out of %zu\n"
-                 "*    Allocating %zu bytes for state handling.\n"
-                 "*    %zu bytes per connection + %zu for state handling.",
-                 capa, (size_t)rlim.rlim_max,
-                 (sizeof(*fio_data) + (capa * (sizeof(*fio_data->poll))) +
-                  (capa * (sizeof(*fio_data->info)))),
-                 (sizeof(*fio_data->poll) + sizeof(*fio_data->info)),
-                 sizeof(*fio_data));
-#else
-    FIO_LOG_INFO("facil.io " FIO_VERSION_STRING " capacity initialization:\n"
-                 "*    Meximum open files %zu out of %zu\n"
-                 "*    Allocating %zu bytes for state handling.\n"
-                 "*    %zu bytes per connection + %zu for state handling.",
-                 capa, (size_t)rlim.rlim_max,
-                 (sizeof(*fio_data) + (capa * (sizeof(*fio_data->info)))),
-                 (sizeof(*fio_data->info)), sizeof(*fio_data));
-#endif
-#endif
   }
 
 #if FIO_ENGINE_POLL
@@ -7309,10 +7301,14 @@ static void fio_mem_init(void) {
     return;
 
   ssize_t cpu_count = 0;
+#ifdef _WIN32
+  SYSTEM_INFO sysinfo;
+  GetSystemInfo(&sysinfo);
+  cpu_count = (ssize_t)sysinfo.dwNumberOfProcessors;
+#else
 #ifdef _SC_NPROCESSORS_ONLN
   cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
-#else
-#warning Dynamic CPU core count is unavailable - assuming 8 cores for memory allocation pools.
+#endif
 #endif
   if (cpu_count <= 0)
     cpu_count = 8;
@@ -7320,7 +7316,9 @@ static void fio_mem_init(void) {
   arenas = big_alloc(sizeof(*arenas) * cpu_count);
   FIO_ASSERT_ALLOC(arenas);
   block_free(block_new());
+#ifndef _WIN32
   pthread_atfork(NULL, NULL, fio_malloc_after_fork);
+#endif
 }
 
 static void fio_mem_destroy(void) {

@@ -58,7 +58,6 @@ Compile Time Settings
 #define FIO_HTTP_EXACT_LOGGING 0
 #endif
 
-
 /** the `http_listen settings, see details in the struct definition. */
 typedef struct http_settings_s http_settings_s;
 
@@ -122,16 +121,6 @@ typedef struct {
 } http_s;
 
 /**
- * This determins the SameSite attribute of a cookie.
- */
-typedef enum {
-  HTTP_COOKIE_SAME_SITE_DEFAULT,
-  HTTP_COOKIE_SAME_SITE_LAX,
-  HTTP_COOKIE_SAME_SITE_STRICT,
-  HTTP_COOKIE_SAME_SITE_NONE
-} http_cookie_same_site_e;
-
-/**
 * This is a helper for setting cookie data.
 
 This struct is used together with the `http_response_set_cookie`. i.e.:
@@ -164,10 +153,6 @@ typedef struct {
   unsigned secure : 1;
   /** Limit cookie to HTTP (intended to prevent javascript access/hijacking).*/
   unsigned http_only : 1;
-  /** Partitioned storage, with a separate cookie jar per top-level site */
-  unsigned partitioned: 1;
-  /** The SameSite attribute, see `http_cookie_same_site_e` for details. */
-  unsigned same_site : 3;
 } http_cookie_args_s;
 
 /**

@@ -31,7 +31,7 @@ Feel free to copy, use and enjoy according to the license provided.
 #undef REQUIRE_LIBRARY
 #define REQUIRE_LIBRARY()                                                      \
   FIO_LOG_FATAL("No supported SSL/TLS library available.");                    \
-  exit(202);   // CoalNova's suggestion. Was: -1
+  exit(-1);
 #endif
 /* STOP deleting after this line */
 
@@ -480,18 +480,14 @@ fio_tls_s *FIO_TLS_WEAK fio_tls_new(const char *server_name, const char *cert,
   REQUIRE_LIBRARY();
   fio_tls_s *tls = calloc(sizeof(*tls), 1);
   tls->ref = 1;
-  if(fio_tls_cert_add(tls, server_name, key, cert, pk_password) != 0) {
-      // file not found error
-      free(tls);
-      return NULL;
-  }
+  fio_tls_cert_add(tls, server_name, key, cert, pk_password);
   return tls;
 }
 
 /**
  * Adds a certificate  a new SSL/TLS context / settings object.
  */
-int FIO_TLS_WEAK fio_tls_cert_add(fio_tls_s *tls, const char *server_name,
+void FIO_TLS_WEAK fio_tls_cert_add(fio_tls_s *tls, const char *server_name,
                                    const char *cert, const char *key,
                                    const char *pk_password) {
   REQUIRE_LIBRARY();
@@ -514,11 +510,11 @@ int FIO_TLS_WEAK fio_tls_cert_add(fio_tls_s *tls, const char *server_name,
   }
   fio_tls_cert_destroy(&c);
   fio_tls_build_context(tls);
-  return 0;
+  return;
 file_missing:
   FIO_LOG_FATAL("TLS certificate file missing for either %s or %s or both.",
                 key, cert);
-  return -1;   // rene
+  exit(-1);
 }
 
 /**
@@ -564,22 +560,22 @@ uintptr_t FIO_TLS_WEAK fio_tls_alpn_count(fio_tls_s *tls) {
  *
  *      fio_tls_trust(tls, "google-ca.pem" );
  */
-int FIO_TLS_WEAK fio_tls_trust(fio_tls_s *tls, const char *public_cert_file) {
+void FIO_TLS_WEAK fio_tls_trust(fio_tls_s *tls, const char *public_cert_file) {
   REQUIRE_LIBRARY();
   trust_s c = {
       .pem = FIO_STR_INIT,
   };
   if (!public_cert_file)
-    return 0;
+    return;
   if (fio_str_readfile(&c.pem, public_cert_file, 0, 0).data == NULL)
     goto file_missing;
   trust_ary_push(&tls->trust, c);
   fio_tls_trust_destroy(&c);
   fio_tls_build_context(tls);
-  return 0;
+  return;
 file_missing:
   FIO_LOG_FATAL("TLS certificate file missing for %s ", public_cert_file);
-  return -1; // rene
+  exit(-1);
 }
 
 /**

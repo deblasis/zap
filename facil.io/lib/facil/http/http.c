@@ -296,38 +296,19 @@ int http_set_cookie(http_s *h, http_cookie_args_s cookie) {
 
   if (cookie.domain && cookie.domain_len) {
     fiobj_str_write(c, "domain=", 7);
-    len += 7;
     fiobj_str_write(c, cookie.domain, cookie.domain_len);
-    len += cookie.domain_len;
     fiobj_str_write(c, ";", 1);
-    len += 1;
     t.data[len++] = ' ';
-    fiobj_str_resize(c, len);
   }
   if (cookie.path && cookie.path_len) {
     fiobj_str_write(c, "path=", 5);
-    len += 5;
     fiobj_str_write(c, cookie.path, cookie.path_len);
-    len += cookie.path_len;
     fiobj_str_write(c, ";", 1);
-    len += 1;
     t.data[len++] = ' ';
-    fiobj_str_resize(c, len);
   }
   if (cookie.http_only) {
     fiobj_str_write(c, "HttpOnly;", 9);
   }
-  if(cookie.partitioned) {
-    fiobj_str_write(c, "Partitioned;", 12);
-  }
-  if(cookie.same_site == HTTP_COOKIE_SAME_SITE_LAX) {
-    fiobj_str_write(c, "SameSite=Lax;", 13);
-  } else if (cookie.same_site == HTTP_COOKIE_SAME_SITE_STRICT) {
-    fiobj_str_write(c, "SameSite=Strict;", 16);
-  } else if (cookie.same_site == HTTP_COOKIE_SAME_SITE_NONE) {
-    fiobj_str_write(c, "SameSite=None;", 14);
-  }
-
   if (cookie.secure) {
     fiobj_str_write(c, "secure;", 7);
   }
@@ -2091,10 +2072,10 @@ void http_write_log(http_s *h) {
     fiobj_str_write(l, " -- ", 4);
   }
 
-  bytes_sent = ((end.tv_sec - start.tv_sec) * 1000000) +
-               ((end.tv_nsec - start.tv_nsec) / 1000);
+  bytes_sent = ((end.tv_sec - start.tv_sec) * 1000) +
+               ((end.tv_nsec - start.tv_nsec) / 1000000);
   fiobj_str_write_i(l, bytes_sent);
-  fiobj_str_write(l, "us\r\n", 4);
+  fiobj_str_write(l, "ms\r\n", 4);
 
   buff = fiobj_obj2cstr(l);
   fwrite(buff.data, 1, buff.len, stderr);
