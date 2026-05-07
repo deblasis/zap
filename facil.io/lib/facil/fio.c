@@ -2009,15 +2009,14 @@ static size_t fio_poll(void) {
   size_t end = fio_data->capa; // max_protocol_fd might break TLS
   size_t start = 0;
   struct pollfd *list = NULL;
-  int own_list = 0; /* 1 if list was allocated, 0 if pointing to shared array */
-  fio_lock(&fio_data->lock);
-  while (start < end && fio_data->poll[start].fd == -1)
-    ++start;
-  while (start < end && fio_data->poll[end - 1].fd == -1)
-    --end;
-  if (start != end) {
-    if (fio_data->threads > 1) {
-      /* Multi-threaded: copy poll list to avoid race conditions */
+  if (fio_data->threads > 1) {
+    /* Multi-threaded: lock + copy poll list */
+    fio_lock(&fio_data->lock);
+    while (start < end && fio_data->poll[start].fd == -1)
+      ++start;
+    while (start < end && fio_data->poll[end - 1].fd == -1)
+      --end;
+    if (start != end) {
       static __thread struct pollfd *tls_list = NULL;
       static __thread size_t tls_capa = 0;
       if (end > tls_capa) {
@@ -2028,14 +2027,16 @@ static size_t fio_poll(void) {
       list = tls_list;
       memcpy(list + start, fio_data->poll + start,
              (sizeof(struct pollfd)) * (end - start));
-      own_list = 0; /* thread-local buffer, no free needed */
-    } else {
-      /* Single-threaded: poll directly on shared array, skip copy */
-      list = fio_data->poll;
-      own_list = 0;
     }
+    fio_unlock(&fio_data->lock);
+  } else {
+    /* Single-threaded: no lock needed, poll directly on shared array */
+    while (start < end && fio_data->poll[start].fd == -1)
+      ++start;
+    while (start < end && fio_data->poll[end - 1].fd == -1)
+      --end;
+    list = fio_data->poll;
   }
-  fio_unlock(&fio_data->lock);
 
   int timeout = fio_timer_calc_first_interval();
   size_t count = 0;
