@@ -2522,35 +2522,40 @@ static intptr_t fio_tcp_socket(const char *address, const char *port,
     // perror("addr err");
     return -1;
   }
-  // get the file descriptor
-  int fd =
-      socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
-  if (fd <= 0) {
-    freeaddrinfo(addrinfo);
-    return -1;
-  }
-  // make sure the socket is non-blocking
-  if (fio_set_non_block(fd) < 0) {
-    freeaddrinfo(addrinfo);
-    close(fd);
-    return -1;
-  }
+  int fd = -1;
   if (server) {
-    {
+    /* On Windows, getaddrinfo may return IPv6 first but the socket
+       created for AF_INET6 cannot bind to AF_INET addresses.
+       We must create a socket per address family and bind the first
+       one that succeeds. */
+    for (struct addrinfo *i = addrinfo; i != NULL; i = i->ai_next) {
+      fd = socket(i->ai_family, i->ai_socktype, i->ai_protocol);
+      if (fd <= 0)
+        continue;
+      // make sure the socket is non-blocking
+      if (fio_set_non_block(fd) < 0) {
+        close(fd);
+        fd = -1;
+        continue;
+      }
       // avoid the "address taken"
       int optval = 1;
       setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
-    }
-    // bind the address to the socket
-    int bound = 0;
-    for (struct addrinfo *i = addrinfo; i != NULL; i = i->ai_next) {
-      if (!bind(fd, i->ai_addr, i->ai_addrlen))
-        bound = 1;
-    }
-    if (!bound) {
-      // perror("bind err");
-      freeaddrinfo(addrinfo);
+#ifdef IPV6_V6ONLY
+      /* On Windows, IPV6_V6ONLY defaults to 1, preventing dual-stack.
+         Set it to 0 so the IPv6 socket also accepts IPv4 connections. */
+      if (i->ai_family == AF_INET6) {
+        optval = 0;
+        setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &optval, sizeof(optval));
+      }
+#endif
+      if (bind(fd, i->ai_addr, i->ai_addrlen) == 0)
+        break; /* bound successfully */
       close(fd);
+      fd = -1;
+    }
+    if (fd < 0) {
+      freeaddrinfo(addrinfo);
       return -1;
     }
 #ifdef TCP_FASTOPEN
@@ -2567,6 +2572,19 @@ static intptr_t fio_tcp_socket(const char *address, const char *port,
       return -1;
     }
   } else {
+    /* Client socket: create one socket and try connecting */
+    fd =
+        socket(addrinfo->ai_family, addrinfo->ai_socktype, addrinfo->ai_protocol);
+    if (fd <= 0) {
+      freeaddrinfo(addrinfo);
+      return -1;
+    }
+    // make sure the socket is non-blocking
+    if (fio_set_non_block(fd) < 0) {
+      freeaddrinfo(addrinfo);
+      close(fd);
+      return -1;
+    }
     int one = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
     errno = 0;

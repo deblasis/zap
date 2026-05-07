@@ -16,7 +16,17 @@
 * A pub/sub process cluster engine for local and Websocket pub/sub.
 * Optional connectivity with Redis.
 
-[facil.io](http://facil.io) provides high performance TCP/IP network services to Linux / BSD (and macOS) by using an evented design (as well as thread pool and forking support) and provides an easy solution to [the C10K problem](http://www.kegel.com/c10k.html).
+[facil.io](http://facil.io) provides high performance TCP/IP network services to Linux / BSD (and macOS) and **Windows** by using an evented design (as well as thread pool and forking support) and provides an easy solution to [the C10K problem](http://www.kegel.com/c10k.html).
+
+## Windows Support
+
+The `windows-support` branch provides full Windows compatibility via a Winsock2 FD mapping layer:
+
+* All core tests pass (memory, strings, arrays, hashes, HTTP, JSON, mustache, etc.)
+* Single-process mode (`workers = 1`) — Windows has no `fork()`, so multi-worker mode is not available
+* TCP/IP sockets, poll-based event loop, HTTP server/client all work
+* Built with `zig cc` or any MinGW-compatible compiler; link with `-lws2_32`
+* Known limitations: No Unix domain sockets, no multi-process cluster mode
 
 You can read more about [facil.io](http://facil.io) on the [facil.io](http://facil.io) website.
 
@@ -130,7 +140,7 @@ You can find more information on the [facil.io](http://facil.io) website
 
 [The contribution guide can be found here](CONTRIBUTING.md).
 
-Sure, why not. If you can add Solaris or Windows support to `evio` and `sock`, that could mean `facil` would become available for use on these platforms as well.
+Sure, why not. **Windows support is now available** on the `windows-support` branch. Solaris support could also be added to `evio` and `sock`.
 
 If you encounter any issues, open an issue (or, even better, a pull request with a fix) - that would be great :-)
 
