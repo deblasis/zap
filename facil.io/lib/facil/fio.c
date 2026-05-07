@@ -2015,8 +2015,18 @@ static size_t fio_poll(void) {
   while (start < end && fio_data->poll[end - 1].fd == -1)
     --end;
   if (start != end) {
-    /* copy poll list for multi-threaded poll */
-    list = fio_malloc(sizeof(struct pollfd) * end);
+    /* Use thread-local static buffer to avoid malloc/free every poll cycle.
+     * On Windows with the FD mapping layer, this eliminates a major
+     * source of overhead — each poll cycle was doing malloc+memcpy+free. */
+    static __thread struct pollfd *tls_list = NULL;
+    static __thread size_t tls_capa = 0;
+    if (end > tls_capa) {
+      /* Grow the buffer if needed (one-time cost) */
+      if (tls_list) fio_free(tls_list);
+      tls_capa = end + 64; /* extra headroom */
+      tls_list = fio_malloc(sizeof(struct pollfd) * tls_capa);
+    }
+    list = tls_list;
     memcpy(list + start, fio_data->poll + start,
            (sizeof(struct pollfd)) * (end - start));
   }
@@ -2059,7 +2069,7 @@ static size_t fio_poll(void) {
     }
   }
 finish:
-  fio_free(list);
+  /* Don't free list — it's a thread-local static buffer */
   return count;
 }
 
