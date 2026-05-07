@@ -95,6 +95,7 @@ pub fn build(b: *std.Build) !void {
         .{ .name = "bindataformpost", .src = "examples/bindataformpost/bindataformpost.zig" },
         .{ .name = "accept", .src = "examples/accept/accept.zig" },
         .{ .name = "bench", .src = "examples/bench/bench.zig" },
+        .{ .name = "bench_server", .src = "examples/bench_server.zig" },
     }) |excfg| {
         const ex_name = excfg.name;
         const ex_src = excfg.src;
