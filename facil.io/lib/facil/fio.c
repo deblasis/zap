@@ -2009,26 +2009,31 @@ static size_t fio_poll(void) {
   size_t end = fio_data->capa; // max_protocol_fd might break TLS
   size_t start = 0;
   struct pollfd *list = NULL;
+  int own_list = 0; /* 1 if list was allocated, 0 if pointing to shared array */
   fio_lock(&fio_data->lock);
   while (start < end && fio_data->poll[start].fd == -1)
     ++start;
   while (start < end && fio_data->poll[end - 1].fd == -1)
     --end;
   if (start != end) {
-    /* Use thread-local static buffer to avoid malloc/free every poll cycle.
-     * On Windows with the FD mapping layer, this eliminates a major
-     * source of overhead — each poll cycle was doing malloc+memcpy+free. */
-    static __thread struct pollfd *tls_list = NULL;
-    static __thread size_t tls_capa = 0;
-    if (end > tls_capa) {
-      /* Grow the buffer if needed (one-time cost) */
-      if (tls_list) fio_free(tls_list);
-      tls_capa = end + 64; /* extra headroom */
-      tls_list = fio_malloc(sizeof(struct pollfd) * tls_capa);
+    if (fio_data->threads > 1) {
+      /* Multi-threaded: copy poll list to avoid race conditions */
+      static __thread struct pollfd *tls_list = NULL;
+      static __thread size_t tls_capa = 0;
+      if (end > tls_capa) {
+        if (tls_list) fio_free(tls_list);
+        tls_capa = end + 64;
+        tls_list = fio_malloc(sizeof(struct pollfd) * tls_capa);
+      }
+      list = tls_list;
+      memcpy(list + start, fio_data->poll + start,
+             (sizeof(struct pollfd)) * (end - start));
+      own_list = 0; /* thread-local buffer, no free needed */
+    } else {
+      /* Single-threaded: poll directly on shared array, skip copy */
+      list = fio_data->poll;
+      own_list = 0;
     }
-    list = tls_list;
-    memcpy(list + start, fio_data->poll + start,
-           (sizeof(struct pollfd)) * (end - start));
   }
   fio_unlock(&fio_data->lock);
 
@@ -2069,7 +2074,7 @@ static size_t fio_poll(void) {
     }
   }
 finish:
-  /* Don't free list — it's a thread-local static buffer */
+  /* Don't free list — either thread-local buffer or shared array */
   return count;
 }
 
